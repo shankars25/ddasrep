@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Download Duplication Alert System</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header>
+        <h1>Data Download Duplication Alert System</h1>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <ul class="tabs">
+        <li><a href="#" class="tab-link" data-tab="uploadTab">Upload</a></li>
+        <li><a href="#" class="tab-link" data-tab="downloadTab">Download by Name</a></li>
+        <li><a href="#" class="tab-link" data-tab="downloadUrlTab">Download from URL</a></li>
+        <li><a href="#" class="tab-link" data-tab="getFilesTab">Get Files</a></li>
+    </ul>
+
+    <!-- Content Area -->
+    <div class="tab-content">
+        <!-- Upload Form -->
+        <div id="uploadTab" class="tab-pane">
+            <h2>Upload File</h2>
+            <form id="uploadForm" enctype="multipart/form-data">
+                <input type="file" name="file" id="file" accept=".pdf,.jpg,.jpeg,.png,.mp3,.xlsx,.xls,.txt" required>
+                <input type="text" name="metadata" placeholder="Enter metadata">
+                <input type="text" name="user_id" id="userIdUpload" placeholder="Enter your user ID" required>
+                <button type="submit">Upload</button>
+            </form>
+            <div id="uploadResponse" class="response-box"></div>
+        </div>
+
+        <!-- Download by Name Form -->
+        <div id="downloadTab" class="tab-pane">
+            <h2>Download File by Name</h2>
+            <form id="downloadNameForm">
+                <input type="text" name="file_name" id="fileName" placeholder="Enter file name" required>
+                <input type="text" name="user_id" id="userIdName" placeholder="Enter your user ID" required>
+                <button type="submit">Download</button>
+            </form>
+            <div id="downloadNameResponse" class="response-box"></div>
+        </div>
+
+        <!-- Download from URL Form -->
+        <div id="downloadUrlTab" class="tab-pane">
+            <h2>Download File from URL</h2>
+            <form id="downloadUrlForm" method="POST">
+                <input type="text" id="fileUrl" placeholder="Enter file URL" required>
+                <input type="text" id="userIdUrl" placeholder="Enter your user ID" required>
+                <button type="submit">Download</button>
+            </form>
+            <div id="downloadUrlResponse" class="response-box"></div>
+        </div>
+
+        <!-- Get Files Tab -->
+        <div id="getFilesTab" class="tab-pane">
+            <h2>Files in Database</h2>
+            <button id="getFilesButton">Get Files</button>
+            <div id="filesList"></div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
