@@ -1,3 +1,4 @@
 Flask
+pymongo
 Flask-Cors  # If using CORS
 gunicorn  # Required for production
