@@ -14,15 +14,18 @@ ALLOWED_EXTENSIONS = {'pdf', 'jpg', 'jpeg', 'png', 'mp3', 'xlsx', 'xls', 'txt'}
 DB_PATH = "files.db"
 
 def get_db_connection():
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn = sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False)  # 10 seconds timeout
     conn.row_factory = sqlite3.Row
     return conn
+
 
 
 def init_db():
     """Initialize the SQLite database."""
     conn = get_db_connection()
     cursor = conn.cursor()
+    
+    cursor.execute("PRAGMA journal_mode=WAL;")  # Enable WAL mode
     
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS files (
@@ -47,6 +50,7 @@ def init_db():
     
     conn.commit()
     conn.close()
+
 
 def calculate_file_hash(file_path):
     """Calculate SHA256 hash of the file."""
@@ -83,7 +87,8 @@ def log_download(file_name, user_id):
     cursor = conn.cursor()
     cursor.execute("INSERT INTO downloads (file_name, user_id) VALUES (?, ?)", (file_name, user_id))
     conn.commit()
-    conn.close()
+    conn.close()  # Ensure the connection is closed
+
 
 @app.route("/") 
 def serve_frontend():
