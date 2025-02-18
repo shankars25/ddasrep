@@ -1,35 +1,97 @@
 from flask import Flask, request, jsonify, send_from_directory
-from duplicate_check import calculate_file_hash, check_duplicate, add_file_to_db, log_download, sanitize_filename, generate_unique_filename
 import os
-import urllib.parse
-from datetime import datetime
-from urllib.request import urlopen
+import sqlite3
+import hashlib
+import urllib.request
 import re
-from database import get_database
+
 app = Flask(__name__, static_folder="../frontend", static_url_path="")
 UPLOAD_FOLDER = "./static/uploads"
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 ALLOWED_EXTENSIONS = {'pdf', 'jpg', 'jpeg', 'png', 'mp3', 'xlsx', 'xls', 'txt'}
 
+# Database initialization
+DB_PATH = "files.db"
 
-def allowed_file(filename):
-    """Check if the uploaded file has an allowed extension."""
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+def get_db_connection():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
 
+def init_db():
+    """Initialize the SQLite database."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS files (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        file_name TEXT UNIQUE,
+        file_path TEXT,
+        file_hash TEXT UNIQUE,
+        uploaded_by TEXT,
+        url TEXT
+    )
+    """)
+    
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS downloads (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        file_name TEXT,
+        user_id TEXT,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (file_name) REFERENCES files(file_name)
+    )
+    """)
+    
+    conn.commit()
+    conn.close()
 
-@app.route("/") #for homepage
+def calculate_file_hash(file_path):
+    """Calculate SHA256 hash of the file."""
+    hash_sha256 = hashlib.sha256()
+    with open(file_path, "rb") as f:
+        for chunk in iter(lambda: f.read(4096), b""):
+            hash_sha256.update(chunk)
+    return hash_sha256.hexdigest()
+
+def check_duplicate(file_hash):
+    """Check if a file with the same hash exists."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM files WHERE file_hash = ?", (file_hash,))
+    duplicate = cursor.fetchone()
+    conn.close()
+    return duplicate
+
+def add_file_to_db(file_name, file_path, file_hash, user_id, url=None):
+    """Insert file metadata into the database."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO files (file_name, file_path, file_hash, uploaded_by, url) 
+        VALUES (?, ?, ?, ?, ?)""",
+        (file_name, file_path, file_hash, user_id, url)
+    )
+    conn.commit()
+    conn.close()
+
+def log_download(file_name, user_id):
+    """Log user downloads."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO downloads (file_name, user_id) VALUES (?, ?)", (file_name, user_id))
+    conn.commit()
+    conn.close()
+
+@app.route("/") 
 def serve_frontend():
     return send_from_directory("../frontend", "index.html")
 
-
-@app.route("/<path:path>")#serving static files
-def serve_static_files(path):
-    return send_from_directory("../frontend", path)
-
-@app.route("/upload", methods=["POST"])
+@app.route("/upload", methods=["POST"]) 
 def upload_file():
     file = request.files.get("file")
-    user_id = request.form.get("user_id")  # Retrieve the user ID
+    user_id = request.form.get("user_id")
 
     if not file or not user_id:
         return jsonify({"error": "File and user ID are required"}), 400
@@ -37,20 +99,18 @@ def upload_file():
     file_path = os.path.join(UPLOAD_FOLDER, file.filename)
     file.save(file_path)
 
-    # Calculate the file hash
     file_hash = calculate_file_hash(file_path)
 
-    # Check for duplicates using file hash
-    duplicate = check_duplicate(file_hash=file_hash)
+    # Check for duplicate
+    duplicate = check_duplicate(file_hash)
     if duplicate:
         return jsonify({
             "message": "Duplicate file detected",
-            "uploaded_by": duplicate.get("uploaded_by", "Unknown")  # Return uploader's user ID
+            "uploaded_by": duplicate["uploaded_by"]
         }), 409
 
-    # Save file details to the database
-    # Change `metadata` to `description` here
-    add_file_to_db(file.filename, file_path, file_hash, description="File metadata", url=None, user_id=user_id)
+    # Save file details to DB
+    add_file_to_db(file.filename, file_path, file_hash, user_id)
     return jsonify({"message": "File uploaded successfully"})
 
 @app.route("/download_by_name", methods=["POST"])
@@ -161,22 +221,19 @@ def download_from_url():
     except Exception as e:
         return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
 
-
 @app.route("/get_files", methods=["GET"])
 def get_files():
-    try:
-        db = get_database()
-        files = db["files"].find()  # Fetch all files from the 'files' collection
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT file_name, file_path, uploaded_by FROM files")
+    files = cursor.fetchall()
+    conn.close()
 
-        # Convert MongoDB cursor to a list of files
-        files_list = [{"file_name": file["file_name"], "file_path": file["file_path"], "uploaded_by": file.get("uploaded_by", "Unknown")} for file in files]
-
-        return jsonify({"files": files_list})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
+    files_list = [{"file_name": file["file_name"], "file_path": file["file_path"], "uploaded_by": file["uploaded_by"]} for file in files]
+    return jsonify({"files": files_list})
 
 if __name__ == "__main__":
     if not os.path.exists(UPLOAD_FOLDER):
         os.makedirs(UPLOAD_FOLDER)
+    init_db()
     app.run(host="0.0.0.0", port=5000, debug=True)
