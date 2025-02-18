@@ -122,7 +122,7 @@ def download_by_name():
         return jsonify({"error": "File name and user ID are required"}), 400
 
     # Retrieve file details from the database
-    db = get_database()
+    conn = get_db_connection()
     file_entry = db["files"].find_one({"file_name": file_name})
 
     if not file_entry:
