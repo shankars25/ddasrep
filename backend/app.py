@@ -97,7 +97,7 @@ def serve_frontend():
 @app.route("/upload", methods=["POST"])
 def upload_file():
     file = request.files.get("file")
-    user_id = request.form.get("user_id")
+    user_id = request.form.get("user_id")  # Retrieve the user ID
 
     if not file or not user_id:
         return jsonify({"error": "File and user ID are required"}), 400
@@ -105,18 +105,20 @@ def upload_file():
     file_path = os.path.join(UPLOAD_FOLDER, file.filename)
     file.save(file_path)
 
+    # Calculate the file hash
     file_hash = calculate_file_hash(file_path)
 
-    # Check for duplicate
-    duplicate = check_duplicate(file_hash)
+    # Check for duplicates using file hash
+    duplicate = check_duplicate(file_hash=file_hash)
     if duplicate:
         return jsonify({
             "message": "Duplicate file detected",
-            "uploaded_by": duplicate["uploaded_by"]
+            "uploaded_by": duplicate.get("uploaded_by", "Unknown")  # Return uploader's user ID
         }), 409
 
-    # Save file details to DB
-    add_file_to_db(file.filename, file_path, file_hash, user_id)
+    # Save file details to the database
+    # Change `metadata` to `description` here
+    add_file_to_db(file.filename, file_path, file_hash, description="File metadata", url=None, user_id=user_id)
     return jsonify({"message": "File uploaded successfully"})
 
 // Download by Name Form
