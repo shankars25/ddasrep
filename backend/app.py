@@ -119,28 +119,82 @@ def upload_file():
     add_file_to_db(file.filename, file_path, file_hash, user_id)
     return jsonify({"message": "File uploaded successfully"})
 
-@app.route("/download_by_name", methods=["POST"])
-def download_by_name():
-    file_name = request.json.get("file_name")
-    user_id = request.json.get("user_id")
+// Download by Name Form
+document.getElementById("downloadNameForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const fileName = document.getElementById("fileName").value;
+    const userId = document.getElementById("userIdName").value;
 
-    if not file_name or not user_id:
-        return jsonify({"error": "File name and user ID are required"}), 400
+    if (!fileName || !userId) {
+        alert("Please provide both the file name and your user ID.");
+        return;
+    }
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM files WHERE file_name = ?", (file_name,))
-    file_entry = cursor.fetchone()
-    conn.close()
+    try {
+        const response = await fetch("/download_by_name", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ file_name: fileName, user_id: userId }),
+        });
 
-    if not file_entry:
-        return jsonify({"error": "File not found"}), 404
+        if (response.status === 200) {
+            const contentDisposition = response.headers.get("Content-Disposition");
 
-    log_download(file_name, user_id)
+            if (contentDisposition && contentDisposition.includes("attachment")) {
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = fileName;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+                alert("File downloaded successfully!");
+            } else {
+                const result = await response.json();
+                document.getElementById("downloadNameResponse").textContent = JSON.stringify(result, null, 2);
+            }
+        } else {
+            const result = await response.json();
+            alert(result.error || "An error occurred while downloading the file.");
+        }
+    } catch (error) {
+        console.error("Error:", error);
+        alert("An error occurred while processing your request.");
+    }
+});
 
-    return send_from_directory(directory=os.path.dirname(file_entry["file_path"]), 
-                               path=os.path.basename(file_entry["file_path"]), 
-                               as_attachment=True)
+// Handle downloading from URL
+document.getElementById("downloadUrlForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const fileUrl = document.getElementById("fileUrl").value;
+    const userId = document.getElementById("userIdUrl").value;
+
+    if (!fileUrl || !userId) {
+        alert("Please provide both the file URL and your user ID.");
+        return;
+    }
+
+    try {
+        const response = await fetch("/download_from_url", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ file_url: fileUrl, user_id: userId }),
+        });
+
+        const result = await response.json();
+
+        // Exclude the "users" field from the alert
+        const { users, ...filteredResult } = result;
+
+        // Display the filtered result (excluding 'users')
+        document.getElementById("downloadUrlResponse").textContent = JSON.stringify(filteredResult, null, 2);
+    } catch (error) {
+        console.error("Error:", error);
+        alert("An error occurred while processing your request.");
+    }
+});
 
 @app.route("/get_files", methods=["GET"])
 def get_files():
